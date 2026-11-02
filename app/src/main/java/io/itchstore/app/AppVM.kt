@@ -284,6 +284,28 @@ class AppVM(app: Application) : AndroidViewModel(app) {
 
     // ----- downloads -----
 
+    private val downloadJobs = HashMap<Long, Job>()
+
+    fun pauseDownload(uploadId: Long) {
+        downloadJobs[uploadId]?.cancel()
+        downloadJobs.remove(uploadId)
+        val st = downloads[uploadId] ?: return
+        if (st.status == "downloading" || st.status == "installing") {
+            st.status = "paused"
+            st.stage = "Paused"
+        }
+    }
+
+    fun resumeDownload(up: Upload, dlKey: String?, autoInstall: Boolean = true, game: Game? = null, linux: Boolean = false, windows: Boolean = false) {
+        download(up, dlKey, autoInstall, game, linux, windows)
+    }
+
+    fun cancelDownload(uploadId: Long) {
+        downloadJobs[uploadId]?.cancel()
+        downloadJobs.remove(uploadId)
+        downloads.remove(uploadId)
+    }
+
     fun download(up: Upload, dlKey: String?, autoInstall: Boolean = true, game: Game? = null, linux: Boolean = false, windows: Boolean = false) {
         val st = downloads.getOrPut(up.id) { DlState() }
         if (st.status == "downloading" || st.status == "installing") return
@@ -292,28 +314,22 @@ class AppVM(app: Application) : AndroidViewModel(app) {
         st.error = null
         val app = getApplication<Application>()
         val key = apiKey
-        viewModelScope.launch {
+
+        val job = viewModelScope.launch {
             try {
-                val base = app.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: app.filesDir
-                val dir = File(base, up.id.toString()).apply { mkdirs() }
-                val name = up.filename.ifBlank { "itch-${up.id}" }.replace(Regex("[^A-Za-z0-9._ -]"), "_")
-                val file = File(dir, name)
-                var last = 0L
-                withContext(Dispatchers.IO) {
-                    Repo.download(key, up, dlKey, file) { done, total ->
-                        val now = System.currentTimeMillis()
-                        if (now - last > 200) {
-                            last = now
-                            st.progress = if (total > 0) done.toFloat() / total else -1f
-                        }
-                    }
-                }
-                st.file = file
                 if ((linux || windows) && game != null) {
-                    st.status = "installing"
-                    st.stage = "Preparing"
+                    st.status = "downloading"
+                    st.stage = "Downloading & Extracting..."
+                    var last = 0L
                     val problem = withContext(Dispatchers.IO) {
-                        LinuxInstall.install(app, game, up, file, windows) { msg -> st.stage = msg }
+                        LinuxInstall.installStream(app, game, up, key, dlKey, windows) { stage, done, total ->
+                            val now = System.currentTimeMillis()
+                            if (now - last > 150) {
+                                last = now
+                                st.stage = stage
+                                if (total > 0 && done >= 0) st.progress = done.toFloat() / total
+                            }
+                        }
                     }
                     if (problem != null) {
                         st.status = "error"
@@ -324,16 +340,36 @@ class AppVM(app: Application) : AndroidViewModel(app) {
                         st.status = "ready"
                     }
                 } else {
+                    val base = app.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: app.filesDir
+                    val dir = File(base, up.id.toString()).apply { mkdirs() }
+                    val name = up.filename.ifBlank { "itch-${up.id}" }.replace(Regex("[^A-Za-z0-9._ -]"), "_")
+                    val file = File(dir, name)
+                    var last = 0L
+                    withContext(Dispatchers.IO) {
+                        Repo.download(key, up, dlKey, file) { done, total ->
+                            val now = System.currentTimeMillis()
+                            if (now - last > 200) {
+                                last = now
+                                st.progress = if (total > 0) done.toFloat() / total else -1f
+                            }
+                        }
+                    }
+                    st.file = file
                     st.progress = 1f
                     st.status = "done"
                     if (up.isApk && autoInstall) installApk(app, file)
                 }
             } catch (e: CancellationException) {
+                st.status = "paused"
+                st.stage = "Paused"
                 throw e
             } catch (e: Exception) {
                 st.status = "error"
                 st.error = e.message ?: "Download failed"
+            } finally {
+                downloadJobs.remove(up.id)
             }
         }
+        downloadJobs[up.id] = job
     }
 }

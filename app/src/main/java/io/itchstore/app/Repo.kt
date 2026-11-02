@@ -494,6 +494,9 @@ object Repo {
         }
     }
 
+    fun openDownloadResponse(key: String, up: Upload, dlKey: String?, from: Long = 0L): Response =
+        openDownload(key, up, dlKey, from)
+
     private fun openDownload(key: String, up: Upload, dlKey: String?, from: Long): Response {
         val q = dlKey?.let { "?download_key_id=$it" } ?: ""
         var r = downloadHttp.newCall(req("${API}uploads/${up.id}/download$q", key, from)).execute()

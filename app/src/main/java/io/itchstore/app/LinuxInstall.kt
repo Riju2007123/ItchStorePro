@@ -127,6 +127,138 @@ object LinuxInstall {
         dir.mkdirs()
         onStage("Unpacking ${archive.name}")
         unpack(archive, dir, onStage)
+        return registerLinux(ctx, game, upload, dir, onStage)
+    }
+
+    private fun installWindows(ctx: Context, game: Game, upload: Upload, archive: File, onStage: (String) -> Unit): String? {
+        val root = LinuxRuntime.rootDir(ctx)
+        val dir = File(root, "Games/itch-${slug(game.title)}")
+        deleteTree(dir)
+        dir.mkdirs()
+        onStage("Unpacking ${archive.name}")
+        unpack(archive, dir, onStage)
+        return registerWindows(ctx, game, upload, dir, onStage)
+    }
+
+    /**
+     * Downloads and extracts an archive in a single stream.
+     */
+    fun installStream(
+        ctx: Context,
+        game: Game,
+        upload: Upload,
+        key: String,
+        dlKey: String?,
+        windows: Boolean,
+        onStage: (String, Long, Long) -> Unit
+    ): String? {
+        if (!runtimeReady(ctx)) return "Install the Linux runtime first, in the Linux tab."
+        val base = ctx.getExternalFilesDir(null) ?: ctx.filesDir
+        val work = if (windows) File(LinuxRuntime.rootDir(ctx), "Games/itch-${slug(game.title)}")
+                   else File(File(base, "linux/${upload.id}"), "game")
+        deleteTree(work)
+        work.mkdirs()
+
+        val fileName = upload.filename.ifBlank { "game.tar.gz" }
+        val format = kind(fileName)
+        var err: Exception? = null
+
+        try {
+            Repo.openDownloadResponse(key, upload, dlKey, 0L).use { response ->
+                val body = response.body ?: error("Empty response")
+                val totalBytes = body.contentLength()
+                body.byteStream().use { rawInput ->
+                    val trackingStream = TrackingInputStream(rawInput) { done ->
+                        onStage("Downloading & Extracting ${fmtSize(done)} / ${if (totalBytes > 0) fmtSize(totalBytes) else "..."}", done, totalBytes)
+                    }
+                    if (format != null && format != "7z") {
+                        unpackStream(trackingStream, fileName, format, work)
+                    } else {
+                        val tempArchive = File(work, fileName)
+                        tempArchive.outputStream().use { out -> trackingStream.copyTo(out) }
+                        unpack(tempArchive, work) { stage -> onStage(stage, -1, totalBytes) }
+                        tempArchive.delete()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            err = e
+        }
+
+        if (err != null) {
+            deleteTree(work)
+            return err.message ?: "Could not install ${game.title}."
+        }
+
+        return if (windows) registerWindows(ctx, game, upload, work, { s -> onStage(s, -1, -1) })
+               else registerLinux(ctx, game, upload, work, { s -> onStage(s, -1, -1) })
+    }
+
+    private class TrackingInputStream(
+        private val delegate: java.io.InputStream,
+        private val onBytesRead: (Long) -> Unit
+    ) : java.io.InputStream() {
+        private var totalRead = 0L
+        override fun read(): Int {
+            val b = delegate.read()
+            if (b >= 0) { totalRead++; onBytesRead(totalRead) }
+            return b
+        }
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            val n = delegate.read(b, off, len)
+            if (n > 0) { totalRead += n; onBytesRead(totalRead) }
+            return n
+        }
+        override fun close() { delegate.close() }
+    }
+
+    private fun unpackStream(input: java.io.InputStream, fileName: String, format: String, into: File) {
+        val codec = format.substringAfter('.')
+        val buffered = BufferedInputStream(input, 128 * 1024)
+        if (format == "zip") {
+            ZipFile.builder().setInputStream(buffered).get().use { zip ->
+                for (entry in zip.entries) {
+                    val target = safe(into, entry.name) ?: continue
+                    if (entry.isDirectory) { target.mkdirs(); continue }
+                    target.parentFile?.mkdirs()
+                    zip.getInputStream(entry).use { inStream ->
+                        FileOutputStream(target).use { outStream -> inStream.copyTo(outStream, 64 * 1024) }
+                    }
+                    if (entry.unixMode and 0x49 != 0) target.setExecutable(true, false)
+                }
+            }
+        } else {
+            val decompressed = when (codec) {
+                "gz" -> GzipCompressorInputStream(buffered, true)
+                "bz2" -> BZip2CompressorInputStream(buffered, true)
+                "xz" -> XZCompressorInputStream(buffered, true)
+                else -> buffered
+            }
+            TarArchiveInputStream(decompressed).use { tar ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val entry = tar.nextEntry ?: break
+                    val target = safe(into, entry.name) ?: continue
+                    if (entry.isDirectory) { target.mkdirs(); continue }
+                    target.parentFile?.mkdirs()
+                    FileOutputStream(target).use { out ->
+                        var n: Int
+                        while (tar.read(buffer, 0, buffer.size).also { n = it } >= 0) {
+                            out.write(buffer, 0, n)
+                        }
+                    }
+                    if (entry.mode and 0x49 != 0) target.setExecutable(true, false)
+                }
+            }
+        }
+        into.walkTopDown().forEach {
+            if (it.isFile && (it.name.endsWith(".sh") || it.name.endsWith(".x86_64") || it.name.endsWith(".x86") || it.name == "python" || it.parentFile?.name?.startsWith("py") == true || isElf(it) || isExecutableScript(it))) {
+                it.setExecutable(true, false)
+            }
+        }
+    }
+
+    private fun registerLinux(ctx: Context, game: Game, upload: Upload, dir: File, onStage: (String) -> Unit): String? {
         var launcher = findLinuxLauncher(dir, game.title)
         if (launcher == null) {
             val inner = dir.listFiles()?.firstOrNull { it.isFile && kind(it.name) != null }
@@ -137,7 +269,7 @@ object LinuxInstall {
                 launcher = findLinuxLauncher(dir, game.title)
             }
         }
-        if (launcher == null) return "No Linux program or start script was found in ${archive.name}."
+        if (launcher == null) return "No Linux program or start script was found in ${upload.filename}."
         val appImage = launcher.name.endsWith(".appimage", ignoreCase = true)
         val entry = if (appImage) launcher else wrapper(dir, launcher)
         onStage("Adding ${game.title} to the library")
@@ -154,17 +286,10 @@ object LinuxInstall {
             ctx,
             Installed(game.url, game.title, false, game.cover, app.key, app.program, app.args, upload.id.toString())
         )
-        if (app.copied) deleteTree(work)
         return null
     }
 
-    private fun installWindows(ctx: Context, game: Game, upload: Upload, archive: File, onStage: (String) -> Unit): String? {
-        val root = LinuxRuntime.rootDir(ctx)
-        val dir = File(root, "Games/itch-${slug(game.title)}")
-        deleteTree(dir)
-        dir.mkdirs()
-        onStage("Unpacking ${archive.name}")
-        unpack(archive, dir, onStage)
+    private fun registerWindows(ctx: Context, game: Game, upload: Upload, dir: File, onStage: (String) -> Unit): String? {
         var rel = StoreExe.pick(dir, upload.filename.substringBeforeLast('.'), game.title)
         if (rel.isBlank()) {
             val inner = dir.listFiles()?.firstOrNull { it.isFile && kind(it.name) != null }
@@ -175,7 +300,7 @@ object LinuxInstall {
                 rel = StoreExe.pick(dir, null, game.title)
             }
         }
-        if (rel.isBlank()) return "No Windows program was found in ${archive.name}."
+        if (rel.isBlank()) return "No Windows program was found in ${upload.filename}."
         val guestExe = "/root/Games/${dir.name}/$rel"
         onStage("Registering ${game.title} for Proton")
         remove(ctx, game.url, keepFiles = true)

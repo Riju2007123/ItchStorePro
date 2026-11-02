@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
@@ -74,6 +75,7 @@ fun App(vm: AppVM = viewModel()) {
         "Discover" to Icons.Default.Home,
         "Search" to Icons.Default.Search,
         "My Games" to Icons.Default.VideogameAsset,
+        "Downloads" to Icons.Default.Download,
         "Saved" to Icons.Default.Favorite,
         "Engine" to Icons.Default.Settings,
         "Account" to Icons.Default.Person
@@ -99,8 +101,9 @@ fun App(vm: AppVM = viewModel()) {
                     0 -> DiscoverScreen(vm)
                     1 -> SearchScreen(vm)
                     2 -> MyGamesScreen(vm) { engineOpen = true }
-                    3 -> SavedScreen(vm)
-                    4 -> RuntimeScreen(vm) { engineOpen = true }
+                    3 -> DownloadsScreen(vm)
+                    4 -> SavedScreen(vm)
+                    5 -> RuntimeScreen(vm) { engineOpen = true }
                     else -> AccountScreen(vm)
                 }
             }

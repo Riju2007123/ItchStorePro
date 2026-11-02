@@ -48,6 +48,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -333,6 +334,80 @@ fun MyGamesScreen(vm: AppVM, onOpenEngine: () -> Unit) {
             apps = apps,
             onDismiss = { editGameFor = null; refresh() }
         )
+    }
+}
+
+@Composable
+fun DownloadsScreen(vm: AppVM) {
+    val downloads = vm.downloads.entries.toList()
+
+    if (downloads.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(32.dp), Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "No active downloads.",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Downloads and streaming extractions will appear here.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+            }
+        }
+        return
+    }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("Downloads", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        }
+
+        items(downloads, key = { it.key }) { (uploadId, state) ->
+            Card(Modifier.fillMaxWidth(), RoundedCornerShape(12.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Download #$uploadId", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(
+                                state.stage.ifBlank { state.status.replaceFirstChar { it.uppercase() } },
+                                fontSize = 12.sp,
+                                color = if (state.status == "error") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (state.status == "downloading" || state.status == "installing") {
+                                OutlinedButton(onClick = { vm.pauseDownload(uploadId) }) { Text("Pause") }
+                            } else if (state.status == "error") {
+                                Button(onClick = { vm.cancelDownload(uploadId) }) { Text("Clear") }
+                            }
+                            IconButton(onClick = { vm.cancelDownload(uploadId) }) {
+                                Icon(Icons.Default.Clear, "Cancel")
+                            }
+                        }
+                    }
+
+                    if (state.status == "downloading" || state.status == "installing") {
+                        if (state.progress >= 0f) {
+                            LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
+                            Text("${(state.progress * 100).toInt()}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            LinearProgressIndicator(Modifier.fillMaxWidth())
+                        }
+                    }
+
+                    state.error?.let {
+                        Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
     }
 }
 
