@@ -81,9 +81,10 @@ object Repo {
         if (cacheRoot == null) cacheRoot = File(ctx.cacheDir, "itch-store").apply { mkdirs() }
     }
 
-    private fun req(url: String, key: String? = null): Request {
+    private fun req(url: String, key: String? = null, from: Long = 0): Request {
         val b = Request.Builder().url(url).header("User-Agent", UA)
         if (!key.isNullOrBlank()) b.header("Authorization", "Bearer $key")
+        if (from > 0) b.header("Range", "bytes=$from-")
         return b.build()
     }
 
@@ -493,12 +494,12 @@ object Repo {
         }
     }
 
-    private fun openDownload(key: String, up: Upload, dlKey: String?): Response {
+    private fun openDownload(key: String, up: Upload, dlKey: String?, from: Long): Response {
         val q = dlKey?.let { "?download_key_id=$it" } ?: ""
-        var r = http.newCall(req("${API}uploads/${up.id}/download$q", key)).execute()
-        if (!r.isSuccessful) {
+        var r = downloadHttp.newCall(req("${API}uploads/${up.id}/download$q", key, from)).execute()
+        if (!r.isSuccessful && r.code != 416) {
             r.close()
-            r = http.newCall(req("${BASE}api/1/$key/upload/${up.id}/download$q")).execute()
+            r = downloadHttp.newCall(req("${BASE}api/1/$key/upload/${up.id}/download$q", from = from)).execute()
         }
         if (!r.isSuccessful) {
             val c = r.code; r.close()
@@ -508,59 +509,74 @@ object Repo {
             val u = JSONObject(r.body!!.string()).optString("url")
             r.close()
             if (u.isBlank()) error(NOT_AVAILABLE)
-            r = http.newCall(req(u)).execute()
+            r = downloadHttp.newCall(req(u, from = from)).execute()
             if (!r.isSuccessful) { val c = r.code; r.close(); error("HTTP $c") }
         }
         return r
     }
 
+    private const val DOWNLOAD_ATTEMPTS = 4
+
+    /**
+     * Streams a response into dest through a .part file. A dropped or stalled connection continues
+     * from the bytes already on disk instead of restarting; a server that ignores Range restarts once.
+     */
+    private fun saveTo(dest: File, open: (from: Long) -> Response, onProgress: (Long, Long) -> Unit) {
+        val tmp = File(dest.path + ".part")
+        dest.parentFile?.mkdirs()
+        var failure: Exception? = null
+        for (attempt in 1..DOWNLOAD_ATTEMPTS) {
+            val have = if (tmp.isFile) tmp.length() else 0L
+            try {
+                open(have).use { r ->
+                    val body = r.body ?: error("Empty response")
+                    val resumed = have > 0 && r.code == 206
+                    val offset = if (resumed) have else 0L
+                    val length = body.contentLength()
+                    val total = if (length < 0) -1L else length + offset
+                    body.byteStream().use { inp ->
+                        java.io.FileOutputStream(tmp, resumed).use { out ->
+                            val buf = ByteArray(64 * 1024)
+                            var done = offset
+                            while (true) {
+                                val n = inp.read(buf)
+                                if (n < 0) break
+                                out.write(buf, 0, n)
+                                done += n
+                                onProgress(done, total)
+                            }
+                        }
+                    }
+                    if (total > 0 && tmp.length() < total) throw java.io.IOException("Connection closed early")
+                }
+                if (dest.exists()) dest.delete()
+                if (!tmp.renameTo(dest)) error("Couldn't save file")
+                return
+            } catch (e: java.io.IOException) {
+                failure = e
+                Thread.sleep(attempt * 1500L)
+            } catch (e: IllegalStateException) {
+                if (have > 0 && e.message == "HTTP 416") {
+                    tmp.delete()
+                    failure = e
+                } else throw e
+            }
+        }
+        throw java.io.IOException("Download interrupted (${failure?.message ?: "network error"}). Tap download again to continue.", failure)
+    }
+
     /** Blocking: call from Dispatchers.IO. */
     fun download(key: String, up: Upload, dlKey: String?, dest: File, onProgress: (Long, Long) -> Unit) {
-        openDownload(key, up, dlKey).use { r ->
-            val body = r.body ?: error("Empty response")
-            val total = body.contentLength()
-            val tmp = File(dest.path + ".part")
-            body.byteStream().use { inp ->
-                tmp.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
-                    var done = 0L
-                    while (true) {
-                        val n = inp.read(buf)
-                        if (n < 0) break
-                        out.write(buf, 0, n)
-                        done += n
-                        onProgress(done, total)
-                    }
-                }
-            }
-            if (dest.exists()) dest.delete()
-            if (!tmp.renameTo(dest)) error("Couldn't save file")
-        }
+        saveTo(dest, { from -> openDownload(key, up, dlKey, from) }, onProgress)
     }
 
     /** Blocking: call from Dispatchers.IO. Used for driver packs and other direct downloads. */
     fun fetchTo(url: String, dest: File, onProgress: (Long, Long) -> Unit) {
-        http.newCall(req(url)).execute().use { r ->
-            if (!r.isSuccessful) error("HTTP ${r.code}")
-            val body = r.body ?: error("Empty response")
-            val total = body.contentLength()
-            val tmp = File(dest.path + ".part")
-            body.byteStream().use { inp ->
-                tmp.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
-                    var done = 0L
-                    while (true) {
-                        val n = inp.read(buf)
-                        if (n < 0) break
-                        out.write(buf, 0, n)
-                        done += n
-                        onProgress(done, total)
-                    }
-                }
-            }
-            if (dest.exists()) dest.delete()
-            if (!tmp.renameTo(dest)) error("Couldn't save file")
-        }
+        saveTo(dest, { from ->
+            val r = downloadHttp.newCall(req(url, from = from)).execute()
+            if (!r.isSuccessful) { val c = r.code; r.close(); error("HTTP $c") }
+            r
+        }, onProgress)
     }
 
     fun sha256(f: File): String {

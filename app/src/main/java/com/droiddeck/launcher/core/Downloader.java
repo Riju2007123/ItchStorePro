@@ -21,8 +21,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public final class Downloader {
     private static final String TAG = "Downloader";
-    private static final int CONNECT_TIMEOUT_MS = 10_000;
-    private static final int STALL_TIMEOUT_MS = 15_000;
+    private static final int CONNECT_TIMEOUT_MS = 20_000;
+    private static final int STALL_TIMEOUT_MS = 60_000;
     private static final int HTTP_RANGE_NOT_SATISFIABLE = 416;
     private static final java.util.concurrent.ExecutorService CANCEL_EXECUTOR =
             java.util.concurrent.Executors.newCachedThreadPool(r -> {

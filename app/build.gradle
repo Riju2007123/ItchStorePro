@@ -331,7 +331,14 @@ if (!ciBuild) {
     tasks.named('preBuild').configure { dependsOn(stageLocalPacks) }
 }
 
+def skipRuntimeVerification = project.hasProperty('skipRuntimeVerification')
+    ? project.findProperty('skipRuntimeVerification').toString().toBoolean()
+    : (localBuildOptions.containsKey('droiddeck.skipRuntimeVerification')
+        ? localBuildOptions.getProperty('droiddeck.skipRuntimeVerification').toString().toBoolean()
+        : !layout.buildDirectory.file('runtime-inputs.json').get().asFile.exists())
+
 def verifyRuntimeInputs = tasks.register('verifyRuntimeInputs', Exec) {
+    onlyIf { !skipRuntimeVerification }
     mustRunAfter(stageSessionScripts, stageRuntimeAssets)
     workingDir rootProject.projectDir
     def allowStale = (project.findProperty('allowStaleRuntime')
@@ -344,8 +351,22 @@ tasks.configureEach { task ->
 
 def rustCrateDir = layout.projectDirectory.dir('src/main/rust/stores')
 def rustJniLibsDir = layout.buildDirectory.dir('rustJniLibs')
-def skipRust = (project.findProperty('skipRust')
-    ?: localBuildOptions.getProperty('droiddeck.skipRust', 'false')).toString().toBoolean()
+def hasRustup = { ->
+    def cargoBinDir = new File(System.getProperty('user.home'), '.cargo/bin')
+    def pathDirs = (System.getenv('PATH') ?: '').split(File.pathSeparator).collect { new File(it) }
+    pathDirs.add(0, cargoBinDir)
+    def extensions = System.getProperty('os.name').toLowerCase().contains('win') ? ['.exe', '.cmd', '.bat', ''] : ['']
+    return pathDirs.any { dir ->
+        extensions.any { ext ->
+            new File(dir, 'rustup' + ext).isFile()
+        }
+    }
+}()
+def skipRust = project.hasProperty('skipRust')
+    ? project.findProperty('skipRust').toString().toBoolean()
+    : (localBuildOptions.containsKey('droiddeck.skipRust')
+        ? localBuildOptions.getProperty('droiddeck.skipRust').toString().toBoolean()
+        : !hasRustup)
 def buildRustStores = tasks.register('buildRustStores', Exec) {
     description = 'Cross-compiles the store download engines (libdroiddeckstores.so) with cargo-ndk.'
     onlyIf { !skipRust }
@@ -366,7 +387,7 @@ def buildRustStores = tasks.register('buildRustStores', Exec) {
     environment 'CARGO_TERM_COLOR', 'never'
     if (!skipRust) environment 'RUSTC', providers.exec {
         commandLine 'rustup', 'which', '--toolchain', 'stable', 'rustc'
-    }.standardOutput.asText.get().trim()
+    }.standardOutput.asText.map { it.trim() }
     commandLine 'rustup', 'run', 'stable', 'cargo', 'ndk', '--target', 'arm64-v8a', '--platform', '26',
         '--output-dir', rustJniLibsDir.get().asFile.absolutePath,
         'build', '--release', '--locked'
