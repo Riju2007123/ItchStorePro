@@ -233,7 +233,9 @@ object LinuxInstall {
         val script = File(root, WRAPPER)
         script.writeText(
             "#!/bin/bash\n" +
-                (if (dir.isEmpty()) "" else "cd \"\$(dirname \"\$0\")/" + shellQuote(dir) + "\" || exit 127\n") +
+                (if (dir.isEmpty()) "cd \"\$(dirname \"\$0\")\" || exit 127\n"
+                else "cd \"\$(dirname \"\$0\")\"/" + shellQuote(dir) + " || exit 127\n") +
+                "chmod +x ./" + shellQuote(name) + " 2>/dev/null\n" +
                 "exec ./" + shellQuote(name) + " \"\$@\"\n"
         )
         return script
