@@ -678,7 +678,7 @@ object SessionPrefs {
     fun allowStockProot(context: Context): Boolean =
         context.getExternalFilesDir(null)?.let { File(it, "droiddeck-stock-proot").isFile } == true
 
-    const val DEFAULT_GUEST_HOSTNAME = "DroidDeck"
+    const val DEFAULT_GUEST_HOSTNAME = "ItchStore"
 
     @JvmStatic
     fun guestHostname(context: Context): String =

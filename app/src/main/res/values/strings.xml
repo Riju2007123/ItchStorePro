@@ -24,12 +24,12 @@
     <string name="glasses_joycons_hint">Use the glasses cameras to position your paired Joy-Cons. Rotation and button inputs come from the Joy-Cons. Position is estimated when your wrists are hidden. Replaces bare-hand controllers and pauses phone-camera tracking. Point the Joy-Cons forward when connecting or recentering.</string>
     <string name="glasses_joycons_requires_position">Enable positional tracking first. Requires motion-capable Joy-Cons on Android 12 or later. Off by default.</string>
     <string name="steamvr_recovery_title">SteamVR graphics stopped</string>
-    <string name="steamvr_recovery_countdown">DroidDeck will restart in %1$d seconds to reset graphics and reopen SteamVR. Your running game will close; unsaved progress cannot be restored.</string>
+    <string name="steamvr_recovery_countdown">Itch Store will restart in %1$d seconds to reset graphics and reopen SteamVR. Your running game will close; unsaved progress cannot be restored.</string>
     <string name="steamvr_recovery_repeated">The graphics fault returned after a recent restart. Automatic recovery is paused to prevent a loop. Restarting will close your game; unsaved progress cannot be restored.</string>
     <string name="steamvr_recovery_restart">Restart now</string>
     <string name="steamvr_recovery_cancel">Keep open</string>
     <string name="steamvr_recovery_restarting">Resetting graphics and reopening SteamVR…</string>
-    <string name="steamvr_recovery_failed">DroidDeck could not restart automatically. Close the app completely, then reopen it.</string>
+    <string name="steamvr_recovery_failed">Itch Store could not restart automatically. Close the app completely, then reopen it.</string>
     <string name="app_name">Itch Store</string>
     <string-array name="loading_hints">
         <item>First run downloads Steam. This may take a few minutes.</item>
@@ -327,7 +327,7 @@
     <string name="back_double_tap_window">Double-tap window</string>
     <string name="back_tap_ms">%1$d ms</string>
     <string name="brightness_permission_title">Allow brightness control</string>
-    <string name="brightness_permission_text">Set up brightness control in DroidDeck.</string>
+    <string name="brightness_permission_text">Set up brightness control in Itch Store.</string>
     <string name="back_menu_then_qam">Menu → QAM</string>
     <string name="back_qam_then_menu">QAM → Menu</string>
     <string name="mode_session">Session</string>
@@ -340,8 +340,8 @@
     <string name="mode_background_downloads_hint">Delay background suspension while Steam is actively downloading.</string>
     <string name="mode_suspend_note">Auto pauses in the background and resumes when shown. Manual waits for Resume. Never keeps running.</string>
     <string name="mode_startup">Startup</string>
-    <string name="mode_steam_startup">Start Steam with DroidDeck</string>
-    <string name="mode_steam_startup_hint">Opens the Steam session when DroidDeck launches.</string>
+    <string name="mode_steam_startup">Start Steam on Launch</string>
+    <string name="mode_steam_startup_hint">Opens the Steam session when Itch Store launches.</string>
     <string name="mode_decky">Decky</string>
     <string name="mode_decky_checking">Checking for releases…</string>
     <string name="mode_decky_ready">Ready to install %1$s.</string>
@@ -364,8 +364,8 @@
     <string name="mode_client">Client</string>
     <string name="mode_mangoapp">Performance overlay</string>
     <string name="mode_mangoapp_hint">Turn off if games crash or go black in Deck mode. Applies next session.</string>
-    <string name="mode_return_after_game">Return to DroidDeck after a game</string>
-    <string name="mode_return_after_game_hint">When a game you started from DroidDeck or another launcher closes, Steam exits cleanly (cloud saves finish first) and you go back there. Off: stay in Steam.</string>
+    <string name="mode_return_after_game">Return to Itch Store after a game</string>
+    <string name="mode_return_after_game_hint">When a game you started closes, Steam exits cleanly and you go back to Itch Store.</string>
     <string name="mode_shader_precache">Shader pre-caching</string>
     <string name="mode_shader_precache_hint">Steam downloads shaders prebuilt for your games and processes them in the background, so games stutter less. Off saves data, storage and battery; games build shaders as they play instead. The same setting as Steam’s Downloads > Shader Pre-Caching. Applies next session.</string>
     <string name="mode_steam_repair">Repair Steam client</string>

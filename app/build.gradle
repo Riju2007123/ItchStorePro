@@ -211,7 +211,7 @@ android {
             def localSuffix = localBuildOptions.getProperty('droiddeck.debugApplicationIdSuffix')
             if (localSuffix) {
                 applicationIdSuffix localSuffix
-                resValue 'string', 'app_name', 'DroidDeck XR Dev'
+                resValue 'string', 'app_name', 'Itch Store Dev'
             }
         }
         release {
