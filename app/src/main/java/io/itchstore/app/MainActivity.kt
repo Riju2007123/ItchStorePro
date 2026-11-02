@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideogameAsset
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -72,8 +73,9 @@ fun App(vm: AppVM = viewModel()) {
     val tabs = listOf(
         "Discover" to Icons.Default.Home,
         "Search" to Icons.Default.Search,
+        "My Games" to Icons.Default.VideogameAsset,
         "Saved" to Icons.Default.Favorite,
-        "Linux" to Icons.Default.Settings,
+        "Engine" to Icons.Default.Settings,
         "Account" to Icons.Default.Person
     )
 
@@ -96,8 +98,9 @@ fun App(vm: AppVM = viewModel()) {
                 when (tab) {
                     0 -> DiscoverScreen(vm)
                     1 -> SearchScreen(vm)
-                    2 -> SavedScreen(vm)
-                    3 -> RuntimeScreen(vm) { engineOpen = true }
+                    2 -> MyGamesScreen(vm) { engineOpen = true }
+                    3 -> SavedScreen(vm)
+                    4 -> RuntimeScreen(vm) { engineOpen = true }
                     else -> AccountScreen(vm)
                 }
             }

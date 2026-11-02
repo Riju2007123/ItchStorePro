@@ -185,6 +185,19 @@ object LinuxInstall {
 
     /** Blocking. Returns true when a session was asked to start. */
     fun play(ctx: Context, item: Installed): Boolean {
+        val gameRes = gameResolution(ctx, item.url)
+        if (gameRes.isNotBlank()) {
+            com.droiddeck.launcher.session.SessionPrefs.setResolutionChoice(ctx, "run", gameRes)
+        }
+        val gameSync = gameSyncBackend(ctx, item.url)
+        if (gameSync.isNotBlank()) {
+            com.droiddeck.launcher.session.SessionPrefs.setSyncBackend(ctx, gameSync)
+        }
+        val gameFex = gameFexPreset(ctx, item.url)
+        if (gameFex.isNotBlank()) {
+            com.droiddeck.launcher.session.SessionPrefs.setFexPreset(ctx, gameFex)
+        }
+
         val (program, args) = if (item.key != null && !item.windows) {
             val app = UserApps.list(ctx).firstOrNull { it.key == item.key } ?: return false
             app.program to app.args
@@ -207,6 +220,27 @@ object LinuxInstall {
 
     fun setCompatArgs(ctx: Context, url: String, value: String) {
         prefs(ctx).edit().putString("compat-args-$url", value.trim()).apply()
+    }
+
+    fun gameResolution(ctx: Context, url: String): String =
+        prefs(ctx).getString("res-$url", "") ?: ""
+
+    fun setGameResolution(ctx: Context, url: String, value: String) {
+        prefs(ctx).edit().putString("res-$url", value.trim()).apply()
+    }
+
+    fun gameSyncBackend(ctx: Context, url: String): String =
+        prefs(ctx).getString("sync-$url", "") ?: ""
+
+    fun setGameSyncBackend(ctx: Context, url: String, value: String) {
+        prefs(ctx).edit().putString("sync-$url", value.trim()).apply()
+    }
+
+    fun gameFexPreset(ctx: Context, url: String): String =
+        prefs(ctx).getString("fex-$url", "") ?: ""
+
+    fun setGameFexPreset(ctx: Context, url: String, value: String) {
+        prefs(ctx).edit().putString("fex-$url", value.trim()).apply()
     }
 
     /** Blocking. Removes the library entry and the unpacked game folder. */

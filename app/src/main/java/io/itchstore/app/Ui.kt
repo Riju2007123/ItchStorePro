@@ -36,8 +36,14 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.VideogameAsset
+import androidx.compose.runtime.rememberCoroutineScope
+import com.droiddeck.launcher.runtime.UserApps
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -204,6 +210,129 @@ fun SavedScreen(vm: AppVM) {
             Text("Saved", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
         items(vm.saved, key = { it.url }) { g -> GameCard(g) { vm.selected = g } }
+    }
+}
+
+@Composable
+fun MyGamesScreen(vm: AppVM, onOpenEngine: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var games by remember { mutableStateOf<List<LinuxInstall.Installed>>(emptyList()) }
+    var apps by remember { mutableStateOf<List<UserApps.App>>(emptyList()) }
+    var editGameFor by remember { mutableStateOf<LinuxInstall.Installed?>(null) }
+
+    fun refresh() {
+        scope.launch {
+            val list = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { LinuxInstall.list(ctx) }
+            val userApps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { UserApps.list(ctx) }.getOrDefault(emptyList())
+            }
+            games = list
+            apps = userApps
+        }
+    }
+    LaunchedEffect(Unit) { refresh() }
+
+    if (games.isEmpty()) {
+        Box(Modifier.fillMaxSize().padding(32.dp), Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "No games installed yet.",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Browse Discover or Search to download Linux or Windows games.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp
+                )
+                OutlinedButton(onClick = onOpenEngine) {
+                    Text("Engine & Emulation Settings")
+                }
+            }
+        }
+        return
+    }
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("My Games", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                OutlinedButton(onClick = onOpenEngine) {
+                    Icon(androidx.compose.material.icons.Icons.Default.Settings, "Engine Settings", modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Engine Settings")
+                }
+            }
+        }
+
+        items(games, key = { it.url }) { game ->
+            Card(Modifier.fillMaxWidth(), RoundedCornerShape(12.dp)) {
+                Row(
+                    Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        Modifier.size(64.dp, 80.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        if (!game.cover.isNullOrBlank()) {
+                            AsyncImage(
+                                model = game.cover,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(game.title, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val platform = if (game.windows) "Windows (Proton)" else "Linux Native"
+                        Text(platform, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                    }
+
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = { LinuxInstall.play(ctx, game) },
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Icon(androidx.compose.material.icons.Icons.Default.PlayArrow, "Play", modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Play")
+                        }
+
+                        Row {
+                            IconButton(onClick = { editGameFor = game }) {
+                                Icon(androidx.compose.material.icons.Icons.Default.Settings, "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            IconButton(onClick = {
+                                scope.launch {
+                                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { LinuxInstall.remove(ctx, game.url) }
+                                    refresh()
+                                }
+                            }) {
+                                Icon(androidx.compose.material.icons.Icons.Default.Clear, "Remove", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    editGameFor?.let { game ->
+        PerGameSettingsDialog(
+            game = game,
+            apps = apps,
+            onDismiss = { editGameFor = null; refresh() }
+        )
     }
 }
 
