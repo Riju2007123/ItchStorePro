@@ -322,7 +322,7 @@ public final class LinuxRuntimeInstaller {
             }
             File carryMarker = new File(staging, CARRY_MARKER);
             java.util.List<String> encodedPaths = new java.util.ArrayList<>();
-            for (String rel : carryPaths) encodedPaths.add(java.net.URLEncoder.encode(rel, "UTF-8"));
+            for (String rel : carryPaths) encodedPaths.add(java.net.URLEncoder.encode(rel, StandardCharsets.UTF_8.name()));
             if (!FileUtils.writeString(carryMarker, String.join("\n", encodedPaths))) {
                 if (old.isDirectory() && !old.renameTo(root))
                     Log.w(TAG, "could not restore the previous runtime; retained at " + old);
@@ -387,7 +387,7 @@ public final class LinuxRuntimeInstaller {
         if (!markerContent.equals("1")) {
             java.util.List<String> intended = new java.util.ArrayList<>();
             for (String rel : markerContent.split("\\n"))
-                if (!rel.isEmpty()) intended.add(java.net.URLDecoder.decode(rel, "UTF-8"));
+                if (!rel.isEmpty()) intended.add(java.net.URLDecoder.decode(rel, StandardCharsets.UTF_8.name()));
             if (target.isDirectory()) RuntimeFileTree.recoverCarriedPaths(staging, target, intended);
             if (staging.isDirectory() && RuntimeFileTree.hasPaths(staging, intended))
                 throw new IOException("User data still needs recovery from " + staging);

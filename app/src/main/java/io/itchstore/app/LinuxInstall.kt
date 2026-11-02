@@ -250,7 +250,7 @@ object LinuxInstall {
         val key = title.lowercase().replace(Regex("[^a-z0-9]"), "")
         val files = ArrayList<File>()
         var scanned = 0
-        dir.walkTopDown().maxDepth(5).forEach { file ->
+        dir.walkTopDown().maxDepth(6).forEach { file ->
             if (scanned++ > ELF_SCAN_LIMIT || file == dir) return@forEach
             if (file.isDirectory) return@forEach
             if (file.name == WRAPPER) return@forEach
@@ -260,26 +260,28 @@ object LinuxInstall {
         data class Ranked(val score: Int, val depth: Int, val matches: Boolean, val file: File)
         val ranked = files.mapNotNull { f ->
             val name = f.name.lowercase()
-            val path = f.absolutePath.removePrefix(dir.absolutePath)
-            if (path.count { it == File.separatorChar } > 1) return@mapNotNull null
-            if (SKIP_NAMES.any { name.startsWith(it) }) return@mapNotNull null
-            if (name.endsWith(".so") || name.contains(".so.")) return@mapNotNull null
+            val relPath = f.absolutePath.removePrefix(dir.absolutePath).trimStart('/', '\\')
+            val depth = relPath.count { it == '/' || it == '\\' }
+            if (depth > 4) return@mapNotNull null
             val parent = f.parentFile?.name?.lowercase()
             if (parent != null && parent in SKIP_DIRS) return@mapNotNull null
-            val depth = path.count { it == File.separatorChar }
+            if (SKIP_NAMES.any { name.startsWith(it) }) return@mapNotNull null
+            if (name.endsWith(".so") || name.contains(".so.")) return@mapNotNull null
             val plain = name.substringBeforeLast('.').replace(Regex("[^a-z0-9]"), "")
             val matches = key.isNotEmpty() && (plain == key || (key.length >= 4 && plain.startsWith(key)) ||
                 (plain.length >= 4 && plain.startsWith(key)))
             var score = when {
                 name.endsWith(".appimage") -> 90
                 isElf(f) -> 70
+                isExecutableScript(f) -> 65
                 name.endsWith(".sh") -> 50
                 name.endsWith(".x86_64") || name.endsWith(".x86") -> 45
+                name.endsWith(".py") -> 40
                 name.endsWith(".desktop") -> 10
                 else -> -1
             }
             if (score < 0) return@mapNotNull null
-            if (name == "start.sh" || name == "run.sh" || name == "launch.sh" || name == "play.sh") score += 25
+            if (name == "start.sh" || name == "run.sh" || name == "launch.sh" || name == "play.sh" || name == "${key}.sh") score += 25
             if (matches) score += 20
             Ranked(score, depth, matches, f)
         }
@@ -301,6 +303,15 @@ object LinuxInstall {
             val b = ByteArray(4)
             input.read(b) == 4 && b[0] == 0x7f.toByte() && b[1] == 'E'.code.toByte() &&
                 b[2] == 'L'.code.toByte() && b[3] == 'F'.code.toByte()
+        }
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun isExecutableScript(f: File): Boolean = try {
+        FileInputStream(f).use { input ->
+            val b = ByteArray(2)
+            input.read(b) == 2 && b[0] == '#'.code.toByte() && b[1] == '!'.code.toByte()
         }
     } catch (_: Exception) {
         false
@@ -343,7 +354,11 @@ object LinuxInstall {
                 }
             }
         }
-        into.walkTopDown().forEach { if (it.isFile && it.name.endsWith(".sh")) it.setExecutable(true) }
+        into.walkTopDown().forEach {
+            if (it.isFile && (it.name.endsWith(".sh") || it.name.endsWith(".x86_64") || it.name.endsWith(".x86") || isElf(it) || isExecutableScript(it))) {
+                it.setExecutable(true)
+            }
+        }
     }
 
     private fun safe(root: File, name: String): File? {
@@ -397,31 +412,30 @@ object LinuxInstall {
         val buffer = ByteArray(64 * 1024)
         val opened = runCatching {
             FileInputStream(archive).use { raw ->
+                val buffered = BufferedInputStream(raw)
                 val input = when (codec) {
-                    "gz" -> GzipCompressorInputStream(BufferedInputStream(raw))
-                    "bz2" -> BZip2CompressorInputStream(BufferedInputStream(raw))
-                    "xz" -> XZCompressorInputStream(BufferedInputStream(raw))
-                    else -> BufferedInputStream(raw)
+                    "gz" -> GzipCompressorInputStream(buffered, true)
+                    "bz2" -> BZip2CompressorInputStream(buffered, true)
+                    "xz" -> XZCompressorInputStream(buffered, true)
+                    else -> buffered
                 }
-                input.use { stream ->
-                    TarArchiveInputStream(stream).use { tar ->
-                        while (true) {
-                            val entry = tar.nextEntry ?: break
-                            val target = safe(into, entry.name) ?: continue
-                            if (entry.isDirectory) {
-                                target.mkdirs()
-                                continue
-                            }
-                            target.parentFile?.mkdirs()
-                            FileOutputStream(target).use { out ->
-                                while (true) {
-                                    val read = tar.read(buffer, 0, buffer.size)
-                                    if (read < 0) break
-                                    out.write(buffer, 0, read)
-                                }
-                            }
-                            if (entry.mode and 0x49 != 0) target.setExecutable(true)
+                TarArchiveInputStream(input).use { tar ->
+                    while (true) {
+                        val entry = tar.nextEntry ?: break
+                        val target = safe(into, entry.name) ?: continue
+                        if (entry.isDirectory) {
+                            target.mkdirs()
+                            continue
                         }
+                        target.parentFile?.mkdirs()
+                        FileOutputStream(target).use { out ->
+                            while (true) {
+                                val read = tar.read(buffer, 0, buffer.size)
+                                if (read < 0) break
+                                out.write(buffer, 0, read)
+                            }
+                        }
+                        if (entry.mode and 0x49 != 0) target.setExecutable(true)
                     }
                 }
             }
@@ -431,10 +445,11 @@ object LinuxInstall {
 
     private fun decompress(archive: File, codec: String, target: File) {
         FileInputStream(archive).use { raw ->
+            val buffered = BufferedInputStream(raw)
             val input = when (codec) {
-                "bz2" -> BZip2CompressorInputStream(BufferedInputStream(raw))
-                "xz" -> XZCompressorInputStream(BufferedInputStream(raw))
-                else -> GzipCompressorInputStream(BufferedInputStream(raw))
+                "bz2" -> BZip2CompressorInputStream(buffered, true)
+                "xz" -> XZCompressorInputStream(buffered, true)
+                else -> GzipCompressorInputStream(buffered, true)
             }
             input.use { FileOutputStream(target).use { out -> it.copyTo(out, 128 * 1024) } }
         }
