@@ -310,6 +310,14 @@ object LinuxInstall {
 
     /** Blocking. Returns true when a session was asked to start. */
     fun play(ctx: Context, item: Installed): Boolean {
+        if (item.windows && com.droiddeck.launcher.runtime.DesktopCatalog.protonSeedNeeded(ctx)) {
+            val entry = com.droiddeck.launcher.runtime.DesktopCatalog.fetch(com.droiddeck.launcher.runtime.DesktopCatalog.STEAM_SEED_URL)
+                ?.firstOrNull { it.id == com.droiddeck.launcher.runtime.DesktopCatalog.PROTON_SEED_ID }
+            if (entry != null) {
+                com.droiddeck.launcher.runtime.DesktopCatalog.install(ctx, entry) { _, _ -> }
+            }
+        }
+
         val gameRes = gameResolution(ctx, item.url)
         if (gameRes.isNotBlank()) {
             com.droiddeck.launcher.session.SessionPrefs.setResolutionChoice(ctx, "run", gameRes)
