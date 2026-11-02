@@ -402,7 +402,7 @@ object LinuxInstall {
             "#!/bin/bash\n" +
                 (if (dir.isEmpty()) "cd \"\$(dirname \"\$0\")\" || exit 127\n"
                 else "cd \"\$(dirname \"\$0\")\"/" + shellQuote(dir) + " || exit 127\n") +
-                "chmod +x ./" + shellQuote(name) + " 2>/dev/null\n" +
+                "chmod -R +x . 2>/dev/null\n" +
                 "exec ./" + shellQuote(name) + " \"\$@\"\n"
         )
         return script
