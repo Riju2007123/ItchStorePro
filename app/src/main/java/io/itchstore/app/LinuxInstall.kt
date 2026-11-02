@@ -309,12 +309,28 @@ object LinuxInstall {
     }
 
     /** Blocking. Returns true when a session was asked to start. */
-    fun play(ctx: Context, item: Installed): Boolean {
+    fun play(ctx: Context, item: Installed, onStatus: ((String) -> Unit)? = null): Boolean {
+        if (!runtimeReady(ctx)) {
+            onStatus?.invoke("Preparing Linux Runtime (300 MB)...")
+            val release = com.droiddeck.launcher.runtime.LinuxRuntimeInstaller.fetchRelease()
+            if (release != null) {
+                val ok = com.droiddeck.launcher.runtime.LinuxRuntimeInstaller.install(ctx, release) { stage, _ ->
+                    onStatus?.invoke(stage)
+                }
+                if (!ok) return false
+            } else {
+                return false
+            }
+        }
+
         if (item.windows && com.droiddeck.launcher.runtime.DesktopCatalog.protonSeedNeeded(ctx)) {
+            onStatus?.invoke("Preparing ARM64 Proton...")
             val entry = com.droiddeck.launcher.runtime.DesktopCatalog.fetch(com.droiddeck.launcher.runtime.DesktopCatalog.STEAM_SEED_URL)
                 ?.firstOrNull { it.id == com.droiddeck.launcher.runtime.DesktopCatalog.PROTON_SEED_ID }
             if (entry != null) {
-                com.droiddeck.launcher.runtime.DesktopCatalog.install(ctx, entry) { _, _ -> }
+                com.droiddeck.launcher.runtime.DesktopCatalog.install(ctx, entry) { stage, _ ->
+                    onStatus?.invoke(stage)
+                }
             }
         }
 
@@ -332,8 +348,8 @@ object LinuxInstall {
         }
 
         val (program, args) = if (item.key != null && !item.windows) {
-            val app = UserApps.list(ctx).firstOrNull { it.key == item.key } ?: return false
-            app.program to app.args
+            val app = UserApps.list(ctx).firstOrNull { it.key == item.key }
+            if (app != null) app.program to app.args else item.program to item.args
         } else {
             item.program to item.args
         }

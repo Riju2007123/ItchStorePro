@@ -204,7 +204,7 @@ fun RuntimeScreen(vm: AppVM, onOpenEngine: () -> Unit) {
                             Text(
                                 when {
                                     busy == "runtime" -> "Installing…"
-                                    installed -> "Update"
+                                    installed -> "Installed (Reinstall)"
                                     else -> "Install runtime"
                                 }
                             )

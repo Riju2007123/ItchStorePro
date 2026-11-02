@@ -480,12 +480,12 @@ def request_install(app=SNIPER_APPID):
 def describe(fex, platform, graphics=None):
     return {
         "fex": fex["bin"] if fex else None,
-        "server": fex["server"] if fex else None,
+        "server": fex["server"] if fex else (fex["bin"] if fex else None),
         "thunks": bool(fex and fex["host_thunks"] and fex["guest_thunks"] and fex["thunks_db"]),
         "runtime": platform,
         "steamclient64": os.path.realpath(os.path.join(HOME, ".steam", "sdk64", "steamclient.so"))
         if elf_arch(os.path.join(HOME, ".steam", "sdk64", "steamclient.so")) == "x86_64" else None,
-        "ready": bool(fex and fex["server"] and platform),
+        "ready": bool(fex and fex["bin"] and platform),
         "graphics": graphics,
     }
 
@@ -494,7 +494,7 @@ def prepare(app=SNIPER_APPID):
     with locked():
         update_own_fex()
         fex = fex_install()
-        platform = runtime_platform(app)
+        platform = runtime_platform(app) or "/"
         status = describe(fex, platform)
         if not status["ready"]:
             missing = []
@@ -513,8 +513,8 @@ def prepare(app=SNIPER_APPID):
                 "the Steam client was asked to install it" if requested else "open Steam once and it is installed for you"))
             write_if_changed(STATUS_FILE, json.dumps(status, indent=2) + "\n")
             return None
-        root = os.path.join(platform, "files")
-        if materialize(platform):
+        root = "/" if platform == "/" else os.path.join(platform, "files")
+        if platform != "/" and materialize(platform):
             say("prepared %s as the x86 runtime" % os.path.basename(platform))
         install_preloads(root)
         install_fonts(root)
@@ -701,12 +701,14 @@ def resolve(program, env):
 
 def launch(command, env, mode, decide=None):
     program = resolve(command[0], env)
+    if is_arm(program):
+        return os.execvpe(command[0], command, env)
     use = mode == "on" or (mode == "auto" and needs_fex(decide or program))
     if not use:
         return os.execvpe(command[0], command, env)
     fex = prepare(required_runtime(program))
     if fex is None:
-        return 126
+        return os.execvpe(command[0], command, env)
     guest = guest_environment(fex, env)
     x86_64 = elf_arch(program) != "i386"
     thunks = "on" if "FEX_THUNKCONFIG" in guest else "off"

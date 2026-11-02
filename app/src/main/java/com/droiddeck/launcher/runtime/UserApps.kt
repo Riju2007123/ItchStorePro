@@ -173,9 +173,13 @@ object UserApps {
     }
 
     fun binds(context: Context): List<String> {
+        val internal = Environment.getExternalStorageDirectory().canonicalPath
+        val filesDir = context.filesDir.canonicalPath
+        val cacheDir = context.cacheDir.canonicalPath
         return root(context).listFiles().orEmpty().mapNotNull { dir ->
             val target = runCatching { Os.readlink(File(dir, "files").path) }.getOrNull() ?: return@mapNotNull null
-            target.takeIf { File(it).isDirectory }
+            val path = runCatching { File(target).canonicalPath }.getOrDefault(target)
+            target.takeIf { File(it).isDirectory && !path.startsWith(internal) && !path.startsWith(filesDir) && !path.startsWith(cacheDir) }
         }.distinct()
     }
 

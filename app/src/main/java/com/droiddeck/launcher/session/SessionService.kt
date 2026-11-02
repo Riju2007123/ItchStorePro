@@ -463,8 +463,8 @@ class SessionService : Service() {
             }
         }
         if (!LinuxRuntime.patchedProot(this)) {
-            if (SessionPrefs.allowStockProot(this)) {
-                Log.w(TAG, "proot: patched proot missing; droiddeck-stock-proot allows the rootfs copy")
+            if (LinuxRuntime.prootBinary(this).isFile || SessionPrefs.allowStockProot(this)) {
+                Log.w(TAG, "proot: patched proot pack missing; using proot at ${LinuxRuntime.prootBinary(this).path}")
             } else {
                 val message = getString(R.string.session_proot_missing)
                 Log.e(TAG, "$message (pack ready=$prootPack)")
