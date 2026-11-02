@@ -144,7 +144,7 @@ object LinuxInstall {
         remove(ctx, game.url, keepFiles = true)
         val source = if (appImage) UserApps.Source.AppImage(launcher) else UserApps.Source.Script(entry)
         val meta = mapOf("itch-url" to game.url, "itch-upload" to upload.id.toString())
-        val problem = UserApps.add(ctx, UserApps.Request(source, game.title, game.cover)) { message, _ -> onStage(message) }
+        val problem = UserApps.add(ctx, UserApps.Request(source, game.title, game.cover, meta)) { message, _ -> onStage(message) }
         if (problem != null) return problem
         val app = UserApps.list(ctx).firstOrNull {
             (appImage && it.kind == UserApps.Kind.APPIMAGE && it.name == game.title) ||
@@ -389,8 +389,8 @@ object LinuxInstall {
             }
         }
         into.walkTopDown().forEach {
-            if (it.isFile && (it.name.endsWith(".sh") || it.name.endsWith(".x86_64") || it.name.endsWith(".x86") || isElf(it) || isExecutableScript(it))) {
-                it.setExecutable(true)
+            if (it.isFile && (it.name.endsWith(".sh") || it.name.endsWith(".x86_64") || it.name.endsWith(".x86") || it.name == "python" || it.parentFile?.name?.startsWith("py") == true || isElf(it) || isExecutableScript(it))) {
+                it.setExecutable(true, false)
             }
         }
     }

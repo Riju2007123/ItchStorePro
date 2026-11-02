@@ -173,10 +173,9 @@ object UserApps {
     }
 
     fun binds(context: Context): List<String> {
-        val internal = Environment.getExternalStorageDirectory().canonicalPath
         return root(context).listFiles().orEmpty().mapNotNull { dir ->
             val target = runCatching { Os.readlink(File(dir, "files").path) }.getOrNull() ?: return@mapNotNull null
-            target.takeIf { !it.startsWith("$internal/") && File(it).isDirectory }
+            target.takeIf { File(it).isDirectory }
         }.distinct()
     }
 
@@ -203,7 +202,10 @@ object UserApps {
         context: Context, script: File, name: String?, icon: File?, meta: Map<String, String>, onProgress: (String, Int) -> Unit,
     ): String? {
         if (!script.isFile) return context.getString(R.string.user_apps_file_gone)
-        val plan = planScript(script)
+        val scriptPlan = planScript(script)
+        val isAppManaged = meta.containsKey("itch-url") || script.canonicalPath.contains("files/linux")
+        val copy = scriptPlan.copy && !isAppManaged
+        val plan = ScriptPlan(scriptPlan.folder, copy, if (copy) scriptPlan.bytes else 0L)
         val base = root(context).apply { mkdirs() }
         if (plan.copy && StatFs(base.path).availableBytes < plan.bytes + (64L shl 20)) {
             return context.getString(R.string.user_apps_no_space, FileUtils.sizeToString(plan.bytes))

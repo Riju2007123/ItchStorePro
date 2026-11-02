@@ -10,11 +10,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.rotate
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -22,40 +21,36 @@ import kotlin.math.sqrt
 
 @Composable
 internal fun LogoThrobber(modifier: Modifier = Modifier, running: Boolean = true) {
-    val ink = MaterialTheme.colorScheme.onBackground
+    val ink = MaterialTheme.colorScheme.primary
     val ball = LocalPalette.current.signal
     val loop = rememberInfiniteTransition(label = "throbber")
-        .animateFloat(0f, 1f, infiniteRepeatable(tween(LOOP_MS, easing = LinearEasing)), label = "loop")
+        .animateFloat(0f, 1f, infiniteRepeatable(tween(1600, easing = LinearEasing)), label = "loop")
     val still = !running || Motion.scale == 0f
-    val left = remember { Path() }
-    val right = remember { Path() }
-    Canvas(modifier.aspectRatio(LogoShape.WIDTH / LogoShape.HEIGHT)) {
+    Canvas(modifier.aspectRatio(1.3f)) {
         val p = if (still) 0f else loop.value
-        val bend = when {
-            p < 0.10f -> 0f
-            p < 0.24f -> Settle.transform((p - 0.10f) / 0.14f)
-            p < 0.76f -> 1f
-            p < 0.90f -> 1f - Settle.transform((p - 0.76f) / 0.14f)
-            else -> 0f
-        }
-        val turn = if (p < 0.16f || p > 0.84f) 0f else Turn.transform((p - 0.16f) / 0.68f) * 360f
-        val ballScale = when {
-            p < 0.12f -> 1f
-            p < 0.30f -> 1f - 0.2f * Settle.transform((p - 0.12f) / 0.18f)
-            p < 0.70f -> 0.8f
-            p < 0.88f -> 0.8f + 0.2f * Settle.transform((p - 0.70f) / 0.18f)
-            else -> 1f
-        }
-        val s = size.width / LogoShape.WIDTH
-        fun px(x: Float, y: Float) = Offset((x - LogoShape.LEFT) * s, y * s)
-        val centre = px(LogoShape.CX, LogoShape.CY)
-        LogoShape.left(left, bend, ::px)
-        LogoShape.right(right, ::px)
-        rotate(turn, centre) {
-            drawPath(left, ink)
-            drawPath(right, ink)
-        }
-        drawCircle(ball, radius = LogoShape.BALL * s * ballScale, center = centre)
+        val pulse = 1f + 0.12f * sin(p * 2 * Math.PI.toFloat())
+        val s = size.width / 140f
+        val w = 110f * s
+        val h = 66f * s
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+
+        // Draw Gamepad Controller Outer Body
+        drawRoundRect(
+            color = ink,
+            topLeft = Offset(cx - w / 2f, cy - h / 2f),
+            size = Size(w, h),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(22f * s, 22f * s)
+        )
+        // D-Pad Cross (Left)
+        drawRect(ink.copy(alpha = 0.25f), topLeft = Offset(cx - w * 0.32f, cy - 10f * s), size = Size(20f * s, 20f * s))
+        // Action Buttons (Right)
+        drawCircle(ball, radius = 6f * s * pulse, center = Offset(cx + w * 0.30f, cy - 10f * s))
+        drawCircle(ball, radius = 6f * s * pulse, center = Offset(cx + w * 0.38f, cy))
+        drawCircle(ball, radius = 6f * s * pulse, center = Offset(cx + w * 0.22f, cy))
+        drawCircle(ball, radius = 6f * s * pulse, center = Offset(cx + w * 0.30f, cy + 10f * s))
+        // Center Glowing Gem
+        drawCircle(ball, radius = 10f * s * pulse, center = Offset(cx, cy))
     }
 }
 
